@@ -713,11 +713,14 @@
 
         async function fetchClients() {
             document.getElementById('refresh-loader').classList.remove('hidden');
-            let reqUrl = `${FB_URL}clients.json`;
-            if (FB_SECRET) reqUrl += `?auth=${FB_SECRET}`;
+            
+            // --- NOVO: BURLAR O CACHE DO NAVEGADOR PARA MOSTRAR OS SITES GRAVADOS NA HORA ---
+            const cb = new Date().getTime();
+            let reqUrl = `${FB_URL}clients.json?_cb=${cb}`; 
+            if (FB_SECRET) reqUrl += `&auth=${FB_SECRET}`;
 
             try {
-                const res = await fetch(reqUrl);
+                const res = await fetch(reqUrl, { cache: 'no-store' });
                 if (!res.ok) throw new Error("Erro");
                 const data = await res.json();
                 window.clientsCache = data || {}; 
@@ -1488,8 +1491,8 @@
                 const minutes = parseInt(row.querySelector('.rule-minutes').value) || 0;
                 
                 if (domain) {
-                    // Limpar input para evitar erros (remover http:// e www.)
-                    domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+                    // Limpar input para evitar erros (remover http:// e www. e padronizar minúsculas)
+                    domain = domain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
                     
                     if (minutes <= 0) {
                         bs_arr.push(domain);
@@ -1516,6 +1519,14 @@
                     fetch(reqUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configData) }),
                     fetch(panelUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configData) })
                 ]);
+                
+                // === NOVO: ATUALIZAR O CACHE LOCAL IMEDIATAMENTE ===
+                // Evita o bug de "sumir" se o utilizador reabrir as configurações muito rápido
+                if(!window.clientsCache[currentTargetId]) {
+                    window.clientsCache[currentTargetId] = {};
+                }
+                window.clientsCache[currentTargetId].panel_config = JSON.parse(JSON.stringify(configData));
+
                 alert('Configurações injetadas com sucesso!');
                 closeModal('config-modal');
                 setTimeout(fetchClients, 1000); 
