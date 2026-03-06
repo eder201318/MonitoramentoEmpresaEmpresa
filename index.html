@@ -309,24 +309,30 @@
                     </div>
                 </div>
 
-                <!-- Nova Seção: Controlo Parental / Corporativo -->
+                <!-- Nova Seção: Controlo Parental / Corporativo (Atualizada) -->
                 <details class="bg-slate-900/80 border border-slate-700 rounded-lg p-3">
                     <summary class="font-bold text-emerald-400 cursor-pointer text-xs sm:text-sm flex items-center gap-2">
                         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                         Controlo Parental & Bloqueios
                     </summary>
                     <div class="pt-3 space-y-3">
-                        <label class="flex flex-col">
-                            <span class="text-rose-400 font-semibold text-xs mb-1">Sites Bloqueados Permanentemente:</span>
-                            <textarea id="mod_blocked_sites" rows="2" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-xs" placeholder="Ex: facebook.com, bet.com, cassino.io"></textarea>
-                            <span class="text-[9px] text-gray-500 mt-1">Separados por vírgula.</span>
-                        </label>
-                        <div class="border-b border-slate-800 my-1"></div>
-                        <label class="flex flex-col">
-                            <span class="text-amber-400 font-semibold text-xs mb-1">Limites Diários (Site: Minutos):</span>
-                            <textarea id="mod_site_limits" rows="3" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-xs" placeholder="youtube.com: 60&#10;roblox.com: 30"></textarea>
-                            <span class="text-[9px] text-gray-500 mt-1">Um por linha. Exemplo: youtube.com: 60</span>
-                        </label>
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Regras Ativas</span>
+                        </div>
+                        
+                        <!-- Container para injetar regras JS -->
+                        <div id="rules-container" class="space-y-2">
+                            <!-- JS vai preencher isto -->
+                        </div>
+
+                        <button type="button" onclick="addRuleRow('', 0)" class="w-full py-2 rounded border border-dashed border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 text-xs font-bold transition-colors">
+                            + Adicionar Nova Regra
+                        </button>
+
+                        <p class="text-[9px] text-gray-500 mt-1 leading-tight">
+                            * Coloque <strong class="text-rose-400">0 (zero)</strong> nos minutos para bloquear o site permanentemente.<br>
+                            * Domínios sem "www" ou "https://" (Ex: <strong class="text-amber-400">youtube.com</strong>)
+                        </p>
                     </div>
                 </details>
 
@@ -428,6 +434,25 @@
         
         let expandedClients = new Set(); 
         window.clientsCache = {};
+
+        // --- FUNÇÃO AUXILIAR PARA ADICIONAR LINHAS DE REGRAS NA UI ---
+        function addRuleRow(domain = '', minutes = 0) {
+            const container = document.getElementById('rules-container');
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2 rule-row bg-slate-900 border border-slate-800 p-2 rounded';
+            
+            row.innerHTML = `
+                <input type="text" class="rule-domain flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white text-xs placeholder-gray-600 focus:border-emerald-500 focus:outline-none" placeholder="Ex: tiktok.com" value="${domain}">
+                <div class="flex items-center gap-1">
+                    <input type="number" class="rule-minutes w-16 bg-slate-950 border border-slate-700 rounded p-2 text-white text-xs text-center focus:border-amber-500 focus:outline-none" placeholder="Min" value="${minutes}" min="0">
+                    <span class="text-[10px] text-gray-500 font-bold">MIN</span>
+                </div>
+                <button type="button" onclick="this.parentElement.remove()" class="text-rose-500 hover:text-white hover:bg-rose-600 p-2 rounded transition-colors active:scale-95 ml-1" title="Remover Regra">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            `;
+            container.appendChild(row);
+        }
 
         async function testTelegramWeb(tokenId, chatId) {
             const token = document.getElementById(tokenId).value.trim();
@@ -1391,16 +1416,22 @@
             document.getElementById('mod_hk').value = cfg.hotkey_str || "<ctrl>+<alt>+h";
             document.getElementById('mod_auto').checked = cfg.auto_start !== false;
 
-            // --- CARREGAR DADOS DE CONTROLO PARENTAL ---
+            // --- CARREGAR DADOS DE CONTROLO PARENTAL (NOVO UI) ---
             const bs = cfg.blocked_sites || [];
-            document.getElementById('mod_blocked_sites').value = bs.join(', ');
-
             const sl = cfg.site_limits || {};
-            const sl_arr = [];
+            
+            // Limpar lista antes de popular
+            document.getElementById('rules-container').innerHTML = '';
+            
+            // Popular regras permanentes (minutos = 0)
+            bs.forEach(domain => {
+                addRuleRow(domain, 0);
+            });
+            
+            // Popular limites de tempo (minutos > 0)
             for (const [domain, limit] of Object.entries(sl)) {
-                sl_arr.push(`${domain}: ${limit}`);
+                addRuleRow(domain, limit);
             }
-            document.getElementById('mod_site_limits').value = sl_arr.join('\n');
 
             document.getElementById('config-modal').classList.remove('hidden');
             document.getElementById('config-modal').classList.add('flex');
@@ -1448,21 +1479,27 @@
                 panel_url: globalAdminConfig.panel_url || "" 
             };
             
-            // --- SALVAR DADOS DE CONTROLO PARENTAL ---
-            const bs_str = document.getElementById('mod_blocked_sites').value;
-            const bs_arr = bs_str.split(',').map(s => s.trim()).filter(s => s !== '');
-            configData.blocked_sites = bs_arr;
-
-            const sl_str = document.getElementById('mod_site_limits').value;
+            // --- SALVAR DADOS DE CONTROLO PARENTAL (NOVO UI) ---
+            const bs_arr = [];
             const sl_obj = {};
-            sl_str.split('\n').forEach(line => {
-                const parts = line.split(':');
-                if(parts.length === 2) {
-                    const domain = parts[0].trim();
-                    const limit = parseInt(parts[1].trim());
-                    if(domain && !isNaN(limit)) sl_obj[domain] = limit;
+            
+            document.querySelectorAll('.rule-row').forEach(row => {
+                let domain = row.querySelector('.rule-domain').value.trim();
+                const minutes = parseInt(row.querySelector('.rule-minutes').value) || 0;
+                
+                if (domain) {
+                    // Limpar input para evitar erros (remover http:// e www.)
+                    domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+                    
+                    if (minutes <= 0) {
+                        bs_arr.push(domain);
+                    } else {
+                        sl_obj[domain] = minutes;
+                    }
                 }
             });
+            
+            configData.blocked_sites = bs_arr;
             configData.site_limits = sl_obj;
 
             const newFbUrl = document.getElementById('mod_fb_url').value.trim();
